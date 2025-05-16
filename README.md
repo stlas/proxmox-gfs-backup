@@ -40,7 +40,7 @@ DRY_RUN="0"                  # 1: Nur Simulation, 0: Tatsächliche Ausführung
 
 1. Klonen Sie das Repository:
    ```bash
-   git clone https://github.com/LaszloFekete/proxmox-gfs-backup.git
+   git clone https://github.com/stlas/proxmox-gfs-backup.git
    ```
 
 2. Machen Sie das Skript ausführbar:
@@ -125,7 +125,7 @@ DRY_RUN="0"                  # 1: Simulation only, 0: Actual execution
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/LaszloFekete/proxmox-gfs-backup.git
+   git clone https://github.com/stlas/proxmox-gfs-backup.git
    ```
 
 2. Make the script executable:
