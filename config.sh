@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# === User Configuration ===
+# Modify these variables according to your needs
+LANG="DE"                     # DE: German, EN: English
+NOTIFICATION_EMAIL=""         # E-Mail address for error notifications
+DAILY_RETENTION_DAYS="8"      # Days to keep daily backups
+WEEKLY_RETENTION_WEEKS="12"   # Weeks to keep weekly backups
+MONTHLY_RETENTION_MONTHS="12" # Months to keep monthly backups
+BACKUP_FREQUENZ_TAG="1"       # Maximum number of backups per day
+DRY_RUN="0"                   # 1: Simulation only, 0: Actual execution
+
+# === System Configuration ===
+# Only modify if you know what you're doing
+BACKUP_DIR="/var/lib/vz/dump"
+LOG_FILE="/opt/community-scripts/log/backup_cleanup.log"
+DATE_FORMAT="%Y_%m_%d"
+HOSTNAME=$(hostname)
