@@ -3,9 +3,7 @@
 # Load configuration
 CONFIG_FILE="$(dirname "$0")/config.sh"
 if [ ! -f "$CONFIG_FILE" ] && [ -f "${CONFIG_FILE}.example" ]; then
-    msg_warning \
-        "No config file found. Copying example config..." \
-        "Keine Konfigurationsdatei gefunden. Kopiere Beispielkonfiguration..."
+    echo "No config file found. Copying example config..."
     cp "${CONFIG_FILE}.example" "$CONFIG_FILE"
 elif [ ! -f "$CONFIG_FILE" ]; then
     echo "Error: Configuration file not found: $CONFIG_FILE"
@@ -14,101 +12,98 @@ fi
 
 source "$CONFIG_FILE"
 
-# Set defaults if not configured
-LANG="${LANG:-EN}"  # Default to English if not set
-NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
-DAILY_RETENTION_DAYS="${DAILY_RETENTION_DAYS:-8}"
-WEEKLY_RETENTION_WEEKS="${WEEKLY_RETENTION_WEEKS:-12}"
-MONTHLY_RETENTION_MONTHS="${MONTHLY_RETENTION_MONTHS:-12}"
-BACKUP_FREQUENZ_TAG="${BACKUP_FREQUENZ_TAG:-1}"
-DRY_RUN="${DRY_RUN:-0}"
-BACKUP_DIR="${BACKUP_DIR:-/var/lib/vz/dump}"
-LOG_FILE="${LOG_FILE:-/opt/community-scripts/log/backup_cleanup.log}"
-DATE_FORMAT="${DATE_FORMAT:-%Y_%m_%d}"
-HOSTNAME="${HOSTNAME:-$(hostname)}"
+# Set defaults
+LOG_LEVEL="${1:-INFO}"  # Default to INFO if not specified
+TOTAL_STEPS=0
+CURRENT_STEP=0
 
-# Send error notification via email
-send_error_mail() {
-    local subject="$1"
-    local message="$2"
-    if [[ -n "$NOTIFICATION_EMAIL" ]]; then
-        echo -e "Error occurred in backup script on $HOSTNAME\n\nTime: $(date)\n\n$message" | \
-        mail -s "[ERROR] $subject" "$NOTIFICATION_EMAIL"
+# Progress bar function
+show_progress() {
+    local width=50
+    local progress=$((CURRENT_STEP * 100 / TOTAL_STEPS))
+    local filled=$((progress * width / 100))
+    local empty=$((width - filled))
+    printf "\rProgress: ["
+    printf "%${filled}s" | tr ' ' '#'
+    printf "%${empty}s" | tr ' ' '-'
+    printf "] %d%%" "$progress"
+    if [ "$CURRENT_STEP" -eq "$TOTAL_STEPS" ]; then
+        printf "\n"
     fi
 }
 
-# Messaging Functions
-msg_info() {
-    local msg="$1"
-    local msg_de="$2"
-    if [[ "$LANG" == "DE" ]]; then
-        echo -e "\e[1;34m[INFO]\e[0m ${msg_de:-$msg}" >&2
+# Logging functions with levels
+should_log() {
+    local level="$1"
+    case "$LOG_LEVEL" in
+        DEBUG) return 0 ;;
+        INFO) [[ "$level" != "DEBUG" ]] && return 0 ;;
+        WARN) [[ "$level" =~ ^(WARN|ERROR)$ ]] && return 0 ;;
+        ERROR) [[ "$level" == "ERROR" ]] && return 0 ;;
+        *) return 1 ;;
+    esac
+    return 1
+}
+
+log_message() {
+    local level="$1"
+    local msg="$2"
+    local msg_de="$3"
+    
+    if ! should_log "$level"; then
+        return 0
+    fi
+
+    local color=""
+    local prefix=""
+    case "$level" in
+        DEBUG) color="\e[1;35m"; prefix="[DEBUG]" ;;
+        INFO)  color="\e[1;34m"; prefix="[INFO]" ;;
+        WARN)  color="\e[1;33m"; prefix="[WARN]" ;;
+        ERROR) color="\e[1;31m"; prefix="[ERROR]" ;;
+    esac
+
+    if [[ "$LANG" == "de_DE.UTF-8" ]]; then
+        echo -e "${color}${prefix}\e[0m ${msg_de:-$msg}" >&2
     else
-        echo -e "\e[1;34m[INFO]\e[0m $msg" >&2
+        echo -e "${color}${prefix}\e[0m $msg" >&2
+    fi
+
+    # Send email for errors
+    if [[ "$level" == "ERROR" && -n "$NOTIFICATION_EMAIL" ]]; then
+        echo -e "Error occurred in backup script on $HOSTNAME\n\nTime: $(date)\n\n${msg_de:-$msg}" | \
+        mail -s "[ERROR] Backup Error" "$NOTIFICATION_EMAIL"
     fi
 }
 
-msg_success() {
-    local msg="$1"
-    local msg_de="$2"
-    if [[ "$LANG" == "DE" ]]; then
-        echo -e "\e[1;32m[ERFOLG]\e[0m ${msg_de:-$msg}" >&2
-    else
-        echo -e "\e[1;32m[SUCCESS]\e[0m $msg" >&2
-    fi
+# Initialize progress counter
+init_progress() {
+    local vm_count=$(qm list | tail -n +2 | wc -l)
+    local ct_count=$(pct list | tail -n +2 | wc -l)
+    TOTAL_STEPS=$((vm_count + ct_count + 2))  # +2 for initialization and cleanup
+    CURRENT_STEP=0
+    show_progress
 }
 
-msg_warning() {
-    local msg="$1"
-    local msg_de="$2"
-    if [[ "$LANG" == "DE" ]]; then
-        echo -e "\e[1;33m[WARNUNG]\e[0m ${msg_de:-$msg}" >&2
-    else
-        echo -e "\e[1;33m[WARNING]\e[0m $msg" >&2
-    fi
+# Update progress
+update_progress() {
+    ((CURRENT_STEP++))
+    show_progress
 }
 
-msg_error() {
-    local msg="$1"
-    local msg_de="$2"
-    local error_msg="${msg_de:-$msg}"
-    if [[ "$LANG" == "DE" ]]; then
-        echo -e "\e[1;31m[FEHLER]\e[0m $error_msg" >&2
-    else
-        echo -e "\e[1;31m[ERROR]\e[0m $msg" >&2
-    fi
-    # Send email notification
-    send_error_mail "Backup Error" "$error_msg"
-}
-
-# Get a list of all LXC container IDs
+# Get container and VM IDs
 get_container_ids() {
-    msg_info \
-        "Retrieving list of LXC containers..." \
-        "Hole Liste der LXC Container..."
-    local container_ids=$(pct list | tail -n +2 | tr -s ' ' | cut -d' ' -f1)
-    msg_info \
-        "Found containers: $container_ids" \
-        "Gefundene Container: $container_ids"
-    echo "$container_ids"
+    pct list | tail -n +2 | tr -s ' ' | cut -d' ' -f1
 }
 
-# Get a list of all VM IDs
 get_vm_ids() {
-    msg_info \
-        "Retrieving list of VMs..." \
-        "Hole Liste der VMs..."
-    local vm_ids=$(qm list | tail -n +2 | tr -s ' ' | cut -d' ' -f2)
-    msg_info \
-        "Found VMs: $vm_ids" \
-        "Gefundene VMs: $vm_ids"
-    echo "$vm_ids"
+    qm list | tail -n +2 | tr -s ' ' | cut -d' ' -f2
 }
 
-# Check if backup already exists for today
+# Check existing backups
 check_existing_backup() {
     local id="$1"
-    local type="$2"  # 'vm' or 'ct'
+    local type="$2"
     local today=$(date +"$DATE_FORMAT")
     local prefix="vzdump-"
     
@@ -121,7 +116,7 @@ check_existing_backup() {
     local count=$(find "$BACKUP_DIR" -name "${prefix}${id}-*${today}*" -type f | wc -l)
     
     if [ "$count" -ge "$BACKUP_FREQUENZ_TAG" ]; then
-        msg_info \
+        log_message "DEBUG" \
             "Daily backup limit reached for ${type} $id" \
             "Tägliches Backup-Limit für ${type} $id erreicht"
         return 1
@@ -129,100 +124,79 @@ check_existing_backup() {
     return 0
 }
 
-# Create backup directory if it doesn't exist
+# Create backup directory
 create_backup_dir() {
     if [ ! -d "$BACKUP_DIR" ]; then
-        msg_info \
+        log_message "INFO" \
             "Creating backup directory: $BACKUP_DIR" \
             "Erstelle Backup-Verzeichnis: $BACKUP_DIR"
         if [ "$DRY_RUN" != "1" ]; then
             mkdir -p "$BACKUP_DIR"
-        else
-            msg_info \
-                "[DRY-RUN] Would create directory: $BACKUP_DIR" \
-                "[DRY-RUN] Würde Verzeichnis erstellen: $BACKUP_DIR"
         fi
     fi
 }
 
-# Perform the actual backup
+# Perform backup
 do_backup() {
     local id="$1"
-    local type="$2"  # 'vm' or 'ct'
+    local type="$2"
     local name="$3"
     
-    msg_info \
-        "Starting backup for ${type} $id ($name)" \
-        "Starte Backup für ${type} $id ($name)"
+    log_message "DEBUG" \
+        "Processing ${type} $id ($name)" \
+        "Verarbeite ${type} $id ($name)"
     
     # Check if container/VM exists
     if [ "$type" == "vm" ]; then
         if ! qm status "$id" &>/dev/null; then
-            msg_error \
+            log_message "ERROR" \
                 "VM $id does not exist!" \
                 "VM $id existiert nicht!"
             return 1
         fi
     else
         if ! pct status "$id" &>/dev/null; then
-            msg_error \
+            log_message "ERROR" \
                 "Container $id does not exist!" \
                 "Container $id existiert nicht!"
             return 1
         fi
     fi
 
-    # Check if backup already exists for today
     if ! check_existing_backup "$id" "$type"; then
         return 0
     fi
 
-    # Create the backup
-    msg_info \
-        "Creating backup for ${type} $id..." \
-        "Erstelle Backup für ${type} $id..."
-    
     if [ "$DRY_RUN" == "1" ]; then
-        msg_info \
+        log_message "DEBUG" \
             "[DRY-RUN] Would execute: vzdump $id --compress zstd" \
             "[DRY-RUN] Würde ausführen: vzdump $id --compress zstd"
-        msg_success \
-            "[DRY-RUN] Backup simulation completed for ${type} $id" \
-            "[DRY-RUN] Backup-Simulation für ${type} $id abgeschlossen"
     else
-        if vzdump "$id" --compress zstd; then
-            msg_success \
-                "Backup completed successfully for ${type} $id" \
-                "Backup für ${type} $id erfolgreich abgeschlossen"
-        else
-            msg_error \
+        if ! vzdump "$id" --compress zstd > /dev/null 2>&1; then
+            log_message "ERROR" \
                 "Backup failed for ${type} $id" \
                 "Backup für ${type} $id fehlgeschlagen"
             return 1
         fi
     fi
+    
+    update_progress
 }
 
 # Cleanup old backups
 cleanup_old_backups() {
-    msg_info \
-        "Starting cleanup of old backups..." \
-        "Starte Bereinigung alter Backups..."
-
-    local today=$(date +%s)
     local found_backups=false
 
-    # Find files older than DAILY_RETENTION_DAYS
     while IFS= read -r backup_file; do
         if [ -n "$backup_file" ]; then
             found_backups=true
             if [ "$DRY_RUN" == "1" ]; then
-                msg_info \
+                log_message "DEBUG" \
                     "[DRY-RUN] Would delete: $backup_file" \
                     "[DRY-RUN] Würde löschen: $backup_file"
             else
                 rm -f "$backup_file"
-                msg_info \
+                log_message "DEBUG" \
                     "Deleted: $backup_file" \
                     "Gelöscht: $backup_file"
             fi
@@ -230,7 +204,7 @@ cleanup_old_backups() {
     done < <(find "$BACKUP_DIR" -name "vzdump-*" -type f -mtime +${DAILY_RETENTION_DAYS} 2>/dev/null)
 
     if [ "$found_backups" = false ]; then
-        msg_info \
+        log_message "DEBUG" \
             "No backups found that meet deletion criteria" \
             "Keine Backups gefunden, die die Löschkriterien erfüllen"
     fi
@@ -238,52 +212,40 @@ cleanup_old_backups() {
 
 # Main execution
 main() {
-    msg_info \
-        "Starting GFS backup manager..." \
-        "Starte GFS Backup Manager..."
-
     if [ "$DRY_RUN" == "1" ]; then
-        msg_warning \
+        log_message "WARN" \
             "Running in DRY-RUN mode - no actual changes will be made" \
             "Läuft im DRY-RUN Modus - es werden keine tatsächlichen Änderungen vorgenommen"
     fi
 
+    init_progress
     create_backup_dir
+    update_progress
 
     # Process VMs
-    msg_info \
-        "Processing VMs..." \
-        "Verarbeite VMs..."
-    vm_ids=$(get_vm_ids)
-    for vm_id in $vm_ids; do
+    for vm_id in $(get_vm_ids); do
         vm_name=$(qm config "$vm_id" | grep "name:" | cut -d' ' -f2)
         if ! do_backup "$vm_id" "vm" "$vm_name"; then
-            msg_error \
+            log_message "ERROR" \
                 "Failed processing VM $vm_id" \
                 "Verarbeitung von VM $vm_id fehlgeschlagen"
-            continue
         fi
     done
 
     # Process Containers
-    msg_info \
-        "Processing Containers..." \
-        "Verarbeite Container..."
-    container_ids=$(get_container_ids)
-    for container_id in $container_ids; do
+    for container_id in $(get_container_ids); do
         container_name=$(pct config "$container_id" | grep "hostname:" | cut -d' ' -f2)
         if ! do_backup "$container_id" "ct" "$container_name"; then
-            msg_error \
+            log_message "ERROR" \
                 "Failed processing container $container_id" \
                 "Verarbeitung von Container $container_id fehlgeschlagen"
-            continue
         fi
     done
 
-    # Cleanup old backups
     cleanup_old_backups
+    update_progress
 
-    msg_success \
+    log_message "INFO" \
         "Backup process completed" \
         "Backup-Prozess abgeschlossen"
 }
