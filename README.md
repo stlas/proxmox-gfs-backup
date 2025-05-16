@@ -33,7 +33,7 @@ DAILY_RETENTION_DAYS="8"     # Aufbewahrungsdauer für tägliche Backups
 WEEKLY_RETENTION_WEEKS="12"   # Aufbewahrungsdauer für wöchentliche Backups
 MONTHLY_RETENTION_MONTHS="12" # Aufbewahrungsdauer für monatliche Backups
 BACKUP_FREQUENZ_TAG="1"      # Maximale Anzahl der Backups pro Tag
-DRY_RUN="1"                  # 1: Nur Simulation, 0: Tatsächliche Ausführung
+DRY_RUN="0"                  # 1: Nur Simulation, 0: Tatsächliche Ausführung
 ```
 
 ### Verwendung
@@ -51,6 +51,15 @@ DRY_RUN="1"                  # 1: Nur Simulation, 0: Tatsächliche Ausführung
 3. Führen Sie das Skript aus:
    ```bash
    ./gfs_backup_manager.sh
+   ```
+
+4. Für automatische Ausführung, fügen Sie folgenden Crontab-Eintrag hinzu:
+   ```bash
+   # Öffnen Sie den Crontab-Editor
+   crontab -e
+
+   # Fügen Sie diese Zeile hinzu (Ausführung täglich um 02:30 Uhr):
+   30 2 * * * /pfad/zu/gfs_backup_manager.sh > /var/log/gfs_backup_manager.log 2>&1
    ```
 
 ### Funktionsweise
@@ -76,6 +85,7 @@ Das Skript:
   - Grün: Erfolge
   - Gelb: Warnungen
   - Rot: Fehler
+- Bei Verwendung des Cronjobs werden alle Ausgaben in /var/log/gfs_backup_manager.log geschrieben
 
 ## English Version
 
@@ -108,7 +118,7 @@ DAILY_RETENTION_DAYS="8"     # Retention period for daily backups
 WEEKLY_RETENTION_WEEKS="12"   # Retention period for weekly backups
 MONTHLY_RETENTION_MONTHS="12" # Retention period for monthly backups
 BACKUP_FREQUENZ_TAG="1"      # Maximum number of backups per day
-DRY_RUN="1"                  # 1: Simulation only, 0: Actual execution
+DRY_RUN="0"                  # 1: Simulation only, 0: Actual execution
 ```
 
 ### Usage
@@ -126,6 +136,15 @@ DRY_RUN="1"                  # 1: Simulation only, 0: Actual execution
 3. Run the script:
    ```bash
    ./gfs_backup_manager.sh
+   ```
+
+4. For automatic execution, add this crontab entry:
+   ```bash
+   # Open the crontab editor
+   crontab -e
+
+   # Add this line (execution daily at 02:30):
+   30 2 * * * /path/to/gfs_backup_manager.sh > /var/log/gfs_backup_manager.log 2>&1
    ```
 
 ### How it works
@@ -151,6 +170,7 @@ The script:
   - Green: Success
   - Yellow: Warnings
   - Red: Errors
+- When using crontab, all output is written to /var/log/gfs_backup_manager.log
 
 ## License
 
