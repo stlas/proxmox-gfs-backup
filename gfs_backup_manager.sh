@@ -49,7 +49,7 @@ WEEKLY_RETENTION_WEEKS="12"
 MONTHLY_RETENTION_MONTHS="12"
 BACKUP_FREQUENZ_TAG="1"
 
-DRY_RUN="1"
+DRY_RUN="0"
 LOG_FILE="/opt/community-scripts/log/backup_cleanup.log"
 
 # Get a list of all LXC container IDs
