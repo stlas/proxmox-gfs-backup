@@ -172,6 +172,10 @@ The script:
   - Red: Errors
 - When using crontab, all output is written to /var/log/gfs_backup_manager.log
 
+## Author
+
+Stefan Laszczak ([@stlas](https://github.com/stlas))
+
 ## License
 
 MIT License - See LICENSE file for details.
