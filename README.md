@@ -6,6 +6,13 @@
 
 Ein Bash-Skript zur Verwaltung von Backups in Proxmox VE mit GFS (Grandfather-Father-Son) Rotationsstrategie.
 
+### Voraussetzungen
+
+- Proxmox VE Installation
+- Root-Zugriff oder Benutzer mit entsprechenden Rechten
+- Bash Shell
+- Ausreichend Speicherplatz für Backups unter /var/lib/vz/dump
+
 ### Funktionen
 
 - Automatische Backup-Erstellung für LXC Container und QEMU VMs
@@ -14,6 +21,9 @@ Ein Bash-Skript zur Verwaltung von Backups in Proxmox VE mit GFS (Grandfather-Fa
 - Trockenlauf-Modus für sichere Tests
 - Mehrsprachige Unterstützung (Deutsch/Englisch)
 - Automatische Bereinigung alter Backups
+- Anzeige der VM- und Container-Namen in allen Meldungen
+- Separate Backup-Typen für VMs (vzdump-qemu-*) und Container (vzdump-lxc-*)
+- Detaillierte Protokollierung aller Aktionen (stderr)
 
 ### Konfiguration
 
@@ -47,14 +57,36 @@ DRY_RUN="1"                  # 1: Nur Simulation, 0: Tatsächliche Ausführung
 
 Das Skript:
 1. Identifiziert alle LXC Container und QEMU VMs
-2. Erstellt Backups mit vzdump
+2. Erstellt Backups mit vzdump (unterschiedliche Präfixe für VMs und Container)
 3. Prüft die tägliche Backup-Frequenz
 4. Bereinigt alte Backups nach GFS-Schema
-5. Protokolliert alle Aktionen
+5. Protokolliert alle Aktionen mit detaillierten Statusmeldungen
+
+### Backup-Typen
+
+- VMs: Backups werden mit dem Präfix `vzdump-qemu-` erstellt
+- Container: Backups werden mit dem Präfix `vzdump-lxc-` erstellt
+- Alle Backups werden komprimiert (zstd) gespeichert
+
+### Protokollierung
+
+- Alle Meldungen werden nach stderr ausgegeben
+- Farbcodierte Meldungen für bessere Lesbarkeit:
+  - Blau: Informationen
+  - Grün: Erfolge
+  - Gelb: Warnungen
+  - Rot: Fehler
 
 ## English Version
 
 A bash script for managing backups in Proxmox VE using GFS (Grandfather-Father-Son) rotation strategy.
+
+### Prerequisites
+
+- Proxmox VE installation
+- Root access or user with appropriate permissions
+- Bash shell
+- Sufficient storage space under /var/lib/vz/dump
 
 ### Features
 
@@ -64,6 +96,9 @@ A bash script for managing backups in Proxmox VE using GFS (Grandfather-Father-S
 - Dry-run mode for safe testing
 - Multilingual support (German/English)
 - Automatic cleanup of old backups
+- Display of VM and container names in all messages
+- Separate backup types for VMs (vzdump-qemu-*) and containers (vzdump-lxc-*)
+- Detailed logging of all actions (stderr)
 
 ### Configuration
 
@@ -97,10 +132,25 @@ DRY_RUN="1"                  # 1: Simulation only, 0: Actual execution
 
 The script:
 1. Identifies all LXC containers and QEMU VMs
-2. Creates backups using vzdump
+2. Creates backups using vzdump (different prefixes for VMs and containers)
 3. Checks daily backup frequency
 4. Cleans up old backups according to GFS scheme
-5. Logs all actions
+5. Logs all actions with detailed status messages
+
+### Backup Types
+
+- VMs: Backups are created with the prefix `vzdump-qemu-`
+- Containers: Backups are created with the prefix `vzdump-lxc-`
+- All backups are stored compressed (zstd)
+
+### Logging
+
+- All messages are output to stderr
+- Color-coded messages for better readability:
+  - Blue: Information
+  - Green: Success
+  - Yellow: Warnings
+  - Red: Errors
 
 ## License
 
