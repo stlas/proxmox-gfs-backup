@@ -1,8 +1,35 @@
 #!/usr/bin/env bash
 
-# === Messaging Functions ===
-LANG_DE=true
+# === User Configuration ===
+# Modify these variables according to your needs
+LANG_DE=true                  # true: German, false: English
+NOTIFICATION_EMAIL=""         # E-Mail address for error notifications
+DAILY_RETENTION_DAYS="8"      # Days to keep daily backups
+WEEKLY_RETENTION_WEEKS="12"   # Weeks to keep weekly backups
+MONTHLY_RETENTION_MONTHS="12" # Months to keep monthly backups
+BACKUP_FREQUENZ_TAG="1"       # Maximum number of backups per day
+DRY_RUN="0"                   # 1: Simulation only, 0: Actual execution
 
+# === System Configuration ===
+# Only modify if you know what you're doing
+BACKUP_DIR="/var/lib/vz/dump"
+LOG_FILE="/opt/community-scripts/log/backup_cleanup.log"
+DATE_FORMAT="%Y_%m_%d"
+HOSTNAME=$(hostname)
+
+# === End of Configuration ===
+
+# Send error notification via email
+send_error_mail() {
+    local subject="$1"
+    local message="$2"
+    if [[ -n "$NOTIFICATION_EMAIL" ]]; then
+        echo -e "Error occurred in backup script on $HOSTNAME\n\nTime: $(date)\n\n$message" | \
+        mail -s "[ERROR] $subject" "$NOTIFICATION_EMAIL"
+    fi
+}
+
+# Messaging Functions
 msg_info() {
     local msg="$1"
     local msg_de="$2"
@@ -36,21 +63,15 @@ msg_warning() {
 msg_error() {
     local msg="$1"
     local msg_de="$2"
+    local error_msg="${msg_de:-$msg}"
     if [[ "$LANG_DE" == "true" ]]; then
-        echo -e "\e[1;31m[FEHLER]\e[0m ${msg_de:-$msg}" >&2
+        echo -e "\e[1;31m[FEHLER]\e[0m $error_msg" >&2
     else
         echo -e "\e[1;31m[ERROR]\e[0m $msg" >&2
     fi
+    # Send email notification
+    send_error_mail "Backup Error" "$error_msg"
 }
-
-# === Configuration ===
-DAILY_RETENTION_DAYS="8"
-WEEKLY_RETENTION_WEEKS="12"
-MONTHLY_RETENTION_MONTHS="12"
-BACKUP_FREQUENZ_TAG="1"
-
-DRY_RUN="0"
-LOG_FILE="/opt/community-scripts/log/backup_cleanup.log"
 
 # Get a list of all LXC container IDs
 get_container_ids() {
@@ -80,8 +101,7 @@ get_vm_ids() {
 check_existing_backup() {
     local id="$1"
     local type="$2"  # 'vm' or 'ct'
-    local today=$(date +%Y_%m_%d)
-    local backup_dir="/var/lib/vz/dump"
+    local today=$(date +"$DATE_FORMAT")
     local prefix="vzdump-"
     
     if [ "$type" == "vm" ]; then
@@ -90,7 +110,7 @@ check_existing_backup() {
         prefix="vzdump-lxc-"
     fi
     
-    local count=$(find "$backup_dir" -name "${prefix}${id}-*${today}*" -type f | wc -l)
+    local count=$(find "$BACKUP_DIR" -name "${prefix}${id}-*${today}*" -type f | wc -l)
     
     if [ "$count" -ge "$BACKUP_FREQUENZ_TAG" ]; then
         msg_info \
@@ -103,18 +123,16 @@ check_existing_backup() {
 
 # Create backup directory if it doesn't exist
 create_backup_dir() {
-    local backup_dir="/var/lib/vz/dump"
-    
-    if [ ! -d "$backup_dir" ]; then
+    if [ ! -d "$BACKUP_DIR" ]; then
         msg_info \
-            "Creating backup directory: $backup_dir" \
-            "Erstelle Backup-Verzeichnis: $backup_dir"
+            "Creating backup directory: $BACKUP_DIR" \
+            "Erstelle Backup-Verzeichnis: $BACKUP_DIR"
         if [ "$DRY_RUN" != "1" ]; then
-            mkdir -p "$backup_dir"
+            mkdir -p "$BACKUP_DIR"
         else
             msg_info \
-                "[DRY-RUN] Would create directory: $backup_dir" \
-                "[DRY-RUN] Würde Verzeichnis erstellen: $backup_dir"
+                "[DRY-RUN] Would create directory: $BACKUP_DIR" \
+                "[DRY-RUN] Würde Verzeichnis erstellen: $BACKUP_DIR"
         fi
     fi
 }
@@ -183,7 +201,6 @@ cleanup_old_backups() {
         "Starting cleanup of old backups..." \
         "Starte Bereinigung alter Backups..."
 
-    local backup_dir="/var/lib/vz/dump"
     local today=$(date +%s)
     local found_backups=false
 
@@ -202,7 +219,7 @@ cleanup_old_backups() {
                     "Gelöscht: $backup_file"
             fi
         fi
-    done < <(find "$backup_dir" -name "vzdump-*" -type f -mtime +${DAILY_RETENTION_DAYS} 2>/dev/null)
+    done < <(find "$BACKUP_DIR" -name "vzdump-*" -type f -mtime +${DAILY_RETENTION_DAYS} 2>/dev/null)
 
     if [ "$found_backups" = false ]; then
         msg_info \
